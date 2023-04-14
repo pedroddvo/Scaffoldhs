@@ -18,13 +18,13 @@ data Term
     deriving (Show, Data, Typeable)
 
 -- whether a term gets moved into a new module
--- e.g `open T` imports *implicit* terms into the module so to prevent shadowing
-data TermExplicit = Explicit | Implicit
+-- e.g `open T` imports *private* terms into the module so to prevent shadowing
+data AccessModifier = Public | Private
     deriving (Show, Data, Typeable)
 
 data Elem
     = Var Var
-    | Term TermExplicit Term
+    | Term AccessModifier Term
     | Exist Existential
     | Solved Existential Type
     | Marker Existential
@@ -60,19 +60,19 @@ builtins =
         , builtin "Int" Star
         ]
   where
-    builtin name = Term Implicit . Kind (Name.Builtin name)
+    builtin name = Term Private . Kind (Name.Builtin name)
 
 vars :: Context -> [Var]
 vars (Context ctx) = [alpha | Var alpha <- ctx]
 
 explicitKinds :: Context -> [(Name, Kind)]
-explicitKinds (Context ctx) = [(v, k) | Term Explicit (Kind v k) <- ctx]
+explicitKinds (Context ctx) = [(v, k) | Term Public (Kind v k) <- ctx]
 
 explicitTypes :: Context -> [(Name, Type)]
-explicitTypes (Context ctx) = [(v, t) | Term Explicit (Type v t) <- ctx]
+explicitTypes (Context ctx) = [(v, t) | Term Public (Type v t) <- ctx]
 
 explicitModules :: Context -> [(Name, Module)]
-explicitModules (Context ctx) = [(v, m) | Term Explicit (Module v m) <- ctx]
+explicitModules (Context ctx) = [(v, m) | Term Public (Module v m) <- ctx]
 
 wf :: Context -> Type -> Bool
 wf ctx = \case
