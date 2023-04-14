@@ -1,0 +1,15 @@
+module Maybe {
+    type Maybe[A] = Some(A) | None
+
+    def map[A, B](f: A -> B, Some(a): Maybe[A]): Maybe[B]
+        = Some(f(a))
+}
+
+module Bool {
+    type Bool = A | B
+
+    def toInt(A: Bool): Int = 1
+}
+
+def aux(): Maybe[Int] =
+    Maybe.map(Bool.toInt, Some(Bool.A))
