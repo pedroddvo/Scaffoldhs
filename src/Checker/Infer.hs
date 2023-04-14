@@ -211,6 +211,20 @@ synth = \case
                 modifyCtx (openModule m <>)
                 synth e
             Nothing -> errorLabel ("undefined module " ++ show t) p
+    Ast.Match _ scrutinee branches -> do
+        alpha <- fresh
+        extend [C.Exist alpha]
+
+        let matchTy = T.Exist alpha
+        scrutineeTy <- synth scrutinee
+
+        forM_ branches $ \(Ast.Branch pat e) -> withNewMarker $ do
+            instantiatePattern scrutineeTy pat
+            ctx <- getCtx
+            check e (C.apply ctx matchTy)
+        
+        ctx <- getCtx
+        return $ C.apply ctx matchTy
     Ast.Numeric{} -> return (T.Base $ Name.Builtin "Int")
     Ast.Tuple _ [] -> return T.Unit
     Ast.Unit -> return T.Unit

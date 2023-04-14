@@ -166,6 +166,15 @@ typeS =
     cs <- option [] constraints <* symbol "="
     Ast.Type sp name cs <$> sepBy1 constructorP (symbol "|")
 
+branchB :: Parser Ast.Branch
+branchB = Ast.Branch <$> patternP <*> (symbol "=>" *> exprE)
+
+matchE :: Parser Ast.Expr
+matchE = do
+    sp <- spanOf (symbol "match")
+    e <- exprE
+    Ast.Match sp e <$> betweenS "{" "}" (sepBy branchB $ symbol ",")
+
 moduleStmts :: Parser Ast.Expr
 moduleStmts = foldr' ($) Ast.Unit <$> some stmts
  where
@@ -178,7 +187,7 @@ moduleS =
     Ast.Module sp name <$> betweenS "{" "}" moduleStmts
 
 exprE :: Parser Ast.Expr
-exprE = openE <|> atomE
+exprE = openE <|> matchE <|> atomE
 
 program :: Parser Ast.Expr
 program = moduleStmts <* eof

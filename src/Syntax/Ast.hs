@@ -36,8 +36,13 @@ data Expr
     | Type Pos Text [Constraint] [Constructor] Expr
     | Module Pos Text Expr Expr
     | Open Pos Text Expr
+    | Match Pos Expr [Branch]
     | -- | Only appears as a terminator for Expr
       Unit
+    deriving (Data, Typeable, Show)
+
+data Branch
+    = Branch Pattern Expr
     deriving (Data, Typeable, Show)
 
 class Spanned a where
@@ -62,7 +67,10 @@ instance Spanned Expr where
         Symbol p _ -> p
         Numeric p _ -> p
         Def p _ _ _ _ _ _ -> p
+        Module p _ _ _ -> p
+        Open p _ _ -> p
         Type p _ _ _ _ -> p
         Tuple p es -> foldl' (<>) p (map pos es)
         Call e es -> foldl' (<>) (pos e) (map pos es)
+        Match p _ _ -> p
         Unit -> undefined
