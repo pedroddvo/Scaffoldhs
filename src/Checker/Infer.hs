@@ -1,6 +1,6 @@
 module Checker.Infer where
 
-import Checker.Context (Context)
+import Checker.Context (Context, TermExplicit (Implicit))
 import Checker.Context qualified as C
 import Checker.Monad (Checker, errorLabel, extend, fresh, getCtx, modifyCtx, withNewMarker, withSplit, freshName)
 import Checker.Subtype (checkWfType, subtype)
@@ -89,10 +89,10 @@ instantiatePattern :: Type -> Ast.Pattern -> Checker ()
 instantiatePattern scrutinee = \case
     Ast.PVar _ x -> do
         name <- freshName x 
-        extend [C.Term name scrutinee]
+        extend [C.Term C.Implicit $ C.Type name scrutinee]
     Ast.PApp p x patterns -> do
         ctx <- getCtx
-        conTy <- case C.findTerm ctx x of
+        conTy <- case C.findType ctx x of
             Just t -> return t
             Nothing -> errorLabel ("undefined constructor " ++ show x) p
         instantiatePatternApp p scrutinee conTy patterns
@@ -170,18 +170,18 @@ synth = \case
             let funcTy' = T.Arrow (T.tuple paramTys) retTy
             let funcTy = foldr applyConstraint funcTy' constraints
             -- bring function into scope now to allow for recursion
-            extend [C.Term name funcTy]
+            extend [C.Term C.Explicit $ C.Type name funcTy]
             -- bring parameters into scope
             forM_ params $ uncurry (flip instantiatePattern)
             check e retTy
             return funcTy
-        extend [C.Term name funcTy]
+        extend [C.Term C.Explicit $ C.Type name funcTy]
         synth e'
     Ast.Type _ name' constraints constructors e -> do
         name <- freshName name'
         let thisTy = T.app (T.Base name) (map constraintType constraints)
         let thisKind = Kind.app (map (const Kind.Star) constraints) Kind.Star
-        extend [C.Kind name thisKind]
+        extend [C.Term C.Explicit $ C.Kind name thisKind]
         elems <- withNewMarker $ do
             forM_ constraints instantiateConstraint
             forM constructors (synthConstructor thisTy constraints)
@@ -192,7 +192,7 @@ synth = \case
         synthApp (Ast.pos e) funcTy args
     Ast.Symbol p t -> do
         ctx <- getCtx
-        case C.findTerm ctx t of
+        case C.findType ctx t of
             Just t' -> return t'
             Nothing -> errorLabel ("undefined symbol " ++ show t) p
     Ast.Module _ t e e' -> do
@@ -200,7 +200,7 @@ synth = \case
             synth e
         let m = makeModule ctx
         name <- freshName t
-        extend [C.Module name m]
+        extend [C.Term C.Explicit $ C.Module name m]
         let qualifiedM = Module.qualifyModule t m
         modifyCtx (openModule qualifiedM <>)
         synth e'
@@ -233,17 +233,17 @@ synth = \case
 makeModule :: Context -> Module
 makeModule ctx =
     Module
-        { Module.module_kinds = M.fromList (C.kinds ctx)
-        , Module.module_types = M.fromList (C.terms ctx)
-        , Module.module_modules = M.fromList (C.modules ctx)
+        { Module.module_kinds = M.fromList (C.explicitKinds ctx)
+        , Module.module_types = M.fromList (C.explicitTypes ctx)
+        , Module.module_modules = M.fromList (C.explicitModules ctx)
         }
 
 openModule :: Module -> Context
 openModule m =
     let kinds = mapToList C.Kind (Module.module_kinds m)
-        terms = mapToList C.Term (Module.module_types m)
+        terms = mapToList C.Type (Module.module_types m)
         modules = mapToList C.Module (Module.module_modules m)
-     in C.Context $ kinds <> terms <> modules
+     in C.Context $ map (C.Term Implicit) $ kinds <> terms <> modules
   where
     mapToList con = M.foldrWithKey (\k v -> (con k v :)) []
 
@@ -256,7 +256,7 @@ synthConstructor thisTy constraints = \case
                 [] -> thisTy
                 ts -> T.Arrow (T.tuple ts) thisTy
         let constructorTy = foldr applyConstraint arrow constraints
-        return $ C.Term name constructorTy
+        return $ C.Term C.Explicit $ C.Type name constructorTy
 
 synthApp :: Pos -> Type -> [Ast.Expr] -> Checker Type
 synthApp p (T.Forall alpha a) args = do

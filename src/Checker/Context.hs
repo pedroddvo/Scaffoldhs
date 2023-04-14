@@ -11,11 +11,20 @@ import Name (Name (Builtin), isName)
 import Type (Existential, Type, Var)
 import Type qualified as T
 
-data Elem
-    = Var Var
-    | Term Name Type
+data Term 
+    = Type Name Type
     | Kind Name Kind
     | Module Name Module
+    deriving (Show, Data, Typeable)
+
+-- whether a term gets moved into a new module
+-- e.g `open T` imports *implicit* terms into the module so to prevent shadowing
+data TermExplicit = Explicit | Implicit
+    deriving (Show, Data, Typeable)
+
+data Elem
+    = Var Var
+    | Term TermExplicit Term
     | Exist Existential
     | Solved Existential Type
     | Marker Existential
@@ -33,9 +42,9 @@ elemPretty = \case
     Exist alpha -> show alpha
     Marker alpha -> "@" ++ show alpha
     Solved alpha t -> show alpha ++ " = " ++ T.pretty t
-    Term x t -> show x ++ " : " ++ T.pretty t
-    Kind x k -> show x ++ " : " ++ show k
-    Module x _ -> "module " ++ show x
+    Term _ (Type x t) -> show x ++ " : " ++ T.pretty t
+    Term _ (Kind x k) -> show x ++ " : " ++ show k
+    Term _ (Module x _) -> "module " ++ show x
 
 exists :: Context -> [Existential]
 exists (Context ctx) =
@@ -51,19 +60,19 @@ builtins =
         , builtin "Int" Star
         ]
   where
-    builtin name = Kind (Name.Builtin name)
+    builtin name = Term Implicit . Kind (Name.Builtin name)
 
 vars :: Context -> [Var]
 vars (Context ctx) = [alpha | Var alpha <- ctx]
 
-kinds :: Context -> [(Name, Kind)]
-kinds (Context ctx) = [(v, k) | Kind v k <- ctx]
+explicitKinds :: Context -> [(Name, Kind)]
+explicitKinds (Context ctx) = [(v, k) | Term Explicit (Kind v k) <- ctx]
 
-terms :: Context -> [(Name, Type)]
-terms (Context ctx) = [(v, t) | Term v t <- ctx]
+explicitTypes :: Context -> [(Name, Type)]
+explicitTypes (Context ctx) = [(v, t) | Term Explicit (Type v t) <- ctx]
 
-modules :: Context -> [(Name, Module)]
-modules (Context ctx) = [(v, m) | Module v m <- ctx]
+explicitModules :: Context -> [(Name, Module)]
+explicitModules (Context ctx) = [(v, m) | Term Explicit (Module v m) <- ctx]
 
 wf :: Context -> Type -> Bool
 wf ctx = \case
@@ -117,17 +126,17 @@ instSolve alpha t ctx = case splitOn (onExistential alpha) ctx of
     (g', g) | wf g t -> Just $ g' <> (g <+ Solved alpha t)
     _ -> Nothing
 
-findTerm :: Context -> Text -> Maybe Type
-findTerm (Context ctx) alpha =
-    listToMaybe [t | Term name t <- ctx, Name.isName alpha name]
+findType :: Context -> Text -> Maybe Type
+findType (Context ctx) alpha =
+    listToMaybe [t | Term _ (Type name t) <- ctx, Name.isName alpha name]
 
 findModule :: Context -> Text -> Maybe Module
 findModule (Context ctx) alpha =
-    listToMaybe [t | Module name t <- ctx, Name.isName alpha name]
+    listToMaybe [t | Term _ (Module name t) <- ctx, Name.isName alpha name]
 
 findKind :: Context -> Text -> Maybe (Name, Kind)
 findKind (Context ctx) alpha =
-    listToMaybe [(name, t) | Kind name t <- ctx, Name.isName alpha name]
+    listToMaybe [(name, t) | Term _ (Kind name t) <- ctx, Name.isName alpha name]
 
 findSolved :: Context -> Existential -> Maybe Type
 findSolved (Context ctx) alpha = listToMaybe [t | Solved beta t <- ctx, alpha == beta]

@@ -15,9 +15,10 @@ module Either {
         Right(b) => Right(f(b))
     }
 
-    def toMaybe[A, B](self: Either[A, B]): Maybe.Maybe[B] = match self {
-        Left(a) => Maybe.None,
-        Right(b) => Maybe.Some(b)
+    open Maybe
+    def toMaybe[A, B](self: Either[A, B]): Maybe[B] = match self {
+        Left(a) => None,
+        Right(b) => Some(b)
     }
 }
 
