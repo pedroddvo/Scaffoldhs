@@ -14,7 +14,7 @@ import Syntax.Parser qualified as Parser
 import Text.Megaparsec qualified as MP
 import Type (Type)
 
-parseProgram :: Text -> Either (MP.ParseErrorBundle Text Void) Ast.Expr
+parseProgram :: Text -> Either (MP.ParseErrorBundle Text Void) (Ast.Expr ())
 parseProgram = MP.parse Parser.program ""
 
 testParseProgram :: Text -> IO ()
@@ -22,7 +22,7 @@ testParseProgram src = case parseProgram src of
     Left err -> putStrLn $ MP.errorBundlePretty err
     Right e -> print e
 
-synthExpr :: Ast.Expr -> (Either Error Type, CheckerState)
+synthExpr :: Ast.Expr () -> (Either Error (Type, Ast.Expr Type), CheckerState)
 synthExpr = runChecker . Infer.synth
 
 testSynthProgram :: Text -> IO ()

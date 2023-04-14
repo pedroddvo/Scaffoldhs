@@ -2,21 +2,20 @@ module Checker.Infer where
 
 import Checker.Context (Context)
 import Checker.Context qualified as C
-import Checker.Monad (Checker, errorLabel, extend, fresh, getCtx, modifyCtx, withNewMarker, withSplit, freshName)
+import Checker.Monad (Checker, errorLabel, extend, fresh, freshName, getCtx, modifyCtx, withNewMarker, withSplit)
 import Checker.Subtype (checkWfType, subtype)
-import Control.Monad (foldM, forM, forM_)
+import Control.Monad (forM, forM_)
 import Data.Map qualified as M
 import Data.Text (Text)
-import Debug.Trace
 import Error (Pos)
 import Kind (Kind)
 import Kind qualified
 import Module (Module (Module))
-import Module qualified as Module
+import Module qualified
 import Syntax.Ast qualified as Ast
-import Type (Type, Var)
+import Type (Type)
 import Type qualified as T
-import qualified Name
+import Unique qualified
 
 typeConv :: Ast.Type -> Checker Type
 typeConv t' = do
@@ -88,7 +87,7 @@ instantiateType = \case
 instantiatePattern :: Type -> Ast.Pattern -> Checker ()
 instantiatePattern scrutinee = \case
     Ast.PVar _ x -> do
-        name <- freshName x 
+        name <- freshName x
         extend [C.Term C.Private $ C.Type name scrutinee]
     Ast.PApp p x patterns -> do
         ctx <- getCtx
@@ -149,19 +148,20 @@ constraintType :: Ast.Constraint -> Type
 constraintType = \case
     Ast.CVar _ x -> T.Var (T.TVar x)
 
-check :: Ast.Expr -> Type -> Checker ()
+check :: Ast.Expr () -> Type -> Checker (Ast.Expr Type)
 check e' t' = case (e', t') of
     (e, b) -> do
-        a <- synth e
+        (a, eT) <- synth e
         let eP = Ast.pos e
         ctx <- getCtx
         subtype eP (C.apply ctx a) (C.apply ctx b)
+        return eT
 
-synth :: Ast.Expr -> Checker Type
+synth :: Ast.Expr () -> Checker (Type, Ast.Expr Type)
 synth = \case
-    Ast.Def _ name' constraints params' retTy' e e' -> do
+    Ast.Def _ p name' constraints params' retTy' e e' -> do
         name <- freshName name'
-        funcTy <- withNewMarker $ do
+        (funcTy, eE) <- withNewMarker $ do
             -- first, instantiate constraints into scope
             forM_ constraints instantiateConstraint
             params <- forM params' (traverse typeConv)
@@ -173,11 +173,12 @@ synth = \case
             extend [C.Term C.Public $ C.Type name funcTy]
             -- bring parameters into scope
             forM_ params $ uncurry (flip instantiatePattern)
-            check e retTy
-            return funcTy
+            eE <- check e retTy
+            return (funcTy, eE)
         extend [C.Term C.Public $ C.Type name funcTy]
-        synth e'
-    Ast.Type _ name' constraints constructors e -> do
+        (t, e'E) <- synth e'
+        return (t, Ast.Def funcTy p name' constraints params' retTy' eE e'E)
+    Ast.Type _ p name' constraints constructors e -> do
         name <- freshName name'
         let thisTy = T.app (T.Base name) (map constraintType constraints)
         let thisKind = Kind.app (map (const Kind.Star) constraints) Kind.Star
@@ -185,49 +186,57 @@ synth = \case
         elems <- withNewMarker $ do
             forM_ constraints instantiateConstraint
             forM constructors (synthConstructor thisTy constraints)
-        extend elems
-        synth e
-    Ast.Call e args -> do
-        funcTy <- synth e
-        synthApp (Ast.pos e) funcTy args
-    Ast.Symbol p t -> do
+        extend $ map fst elems
+        (t, eE) <- synth e
+        return (t, Ast.Type T.Unit p name' constraints (map snd elems) eE)
+    Ast.Call _ e args -> do
+        (funcTy, e') <- synth e
+        (t, args') <- synthApp (Ast.pos e) funcTy args
+        return (t, Ast.Call t e' args')
+    Ast.Symbol _ p t -> do
         ctx <- getCtx
         case C.findType ctx t of
-            Just t' -> return t'
+            Just t' -> return (t', Ast.Symbol t' p t)
             Nothing -> errorLabel ("undefined symbol " ++ show t) p
-    Ast.Module _ t e e' -> do
-        (_, ctx) <- withSplit $ do
+    Ast.Module _ p name' e e' -> do
+        ((eT, eE), ctx) <- withSplit $ do
             synth e
         let m = makeModule ctx
-        name <- freshName t
+        name <- freshName name'
         extend [C.Term C.Public $ C.Module name m]
-        let qualifiedM = Module.qualifyModule t m
+        let qualifiedM = Module.qualifyModule name' m
         modifyCtx (openModule qualifiedM <>)
-        synth e'
-    Ast.Open p t e -> do
+        (t, e'E) <- synth e'
+        return (t, Ast.Module eT p name' eE e'E)
+    Ast.Open _ p name e -> do
         ctx <- getCtx
-        case C.findModule ctx t of
+        case C.findModule ctx name of
             Just m -> do
                 modifyCtx (openModule m <>)
-                synth e
-            Nothing -> errorLabel ("undefined module " ++ show t) p
-    Ast.Match _ scrutinee branches -> do
+                (t, eE) <- synth e
+                return (t, Ast.Open T.Unit p name eE)
+            Nothing -> errorLabel ("undefined module " ++ show name) p
+    Ast.Match _ p scrutinee branches -> do
         alpha <- fresh
         extend [C.Exist alpha]
 
         let matchTy = T.Exist alpha
-        scrutineeTy <- synth scrutinee
+        (scrutineeTy, scrutinee') <- synth scrutinee
 
-        forM_ branches $ \(Ast.Branch pat e) -> withNewMarker $ do
+        branches' <- forM branches $ \(Ast.Branch pat e) -> withNewMarker $ do
             instantiatePattern scrutineeTy pat
             ctx <- getCtx
-            check e (C.apply ctx matchTy)
-        
+            e' <- check e (C.apply ctx matchTy)
+            return $ Ast.Branch pat e'
+
         ctx <- getCtx
-        return $ C.apply ctx matchTy
-    Ast.Numeric{} -> return (T.Base $ Name.Builtin "Int")
-    Ast.Tuple _ [] -> return T.Unit
-    Ast.Unit -> return T.Unit
+        let t = C.apply ctx matchTy
+        return (t, Ast.Match t p scrutinee' branches')
+    Ast.Numeric _ p t -> do
+        let t' = T.Base $ Unique.Builtin "Int"
+        return (t', Ast.Numeric t' p t)
+    Ast.Tuple _ p [] -> return (T.Unit, Ast.Tuple T.Unit p [])
+    Ast.Unit _ -> return (T.Unit, Ast.Unit T.Unit)
     e -> error $ "synth unimplemented for " ++ show e
 
 makeModule :: Context -> Module
@@ -247,31 +256,32 @@ openModule m =
   where
     mapToList con = M.foldrWithKey (\k v -> (con k v :)) []
 
-synthConstructor :: Type -> [Ast.Constraint] -> Ast.Constructor -> Checker C.Elem
+synthConstructor :: Type -> [Ast.Constraint] -> Ast.Constructor () -> Checker (C.Elem, Ast.Constructor Type)
 synthConstructor thisTy constraints = \case
-    Ast.Constructor _ name' params' -> do
+    Ast.Constructor _ p name' params' -> do
         name <- freshName name'
         params <- mapM typeConv params'
         let arrow = case params of
                 [] -> thisTy
                 ts -> T.Arrow (T.tuple ts) thisTy
         let constructorTy = foldr applyConstraint arrow constraints
-        return $ C.Term C.Public $ C.Type name constructorTy
+        let el = C.Term C.Public $ C.Type name constructorTy
+        return (el, Ast.Constructor constructorTy p name' params')
 
-synthApp :: Pos -> Type -> [Ast.Expr] -> Checker Type
+synthApp :: Pos -> Type -> [Ast.Expr ()] -> Checker (Type, [Ast.Expr Type])
 synthApp p (T.Forall alpha a) args = do
     alphaE <- fresh
     extend [C.Exist alphaE]
     synthApp p (T.substitute (T.Exist alphaE) alpha a) args
-synthApp _ (T.Arrow T.Unit c) [] = return c
+synthApp _ (T.Arrow T.Unit c) [] = return (c, [])
 synthApp p (T.Arrow (T.Tuple params) c) args
     | length params == length args = do
-        forM_ (zip args params) $ uncurry check
-        return c
+        args' <- forM (zip args params) $ uncurry check
+        return (c, args')
     | otherwise = errorLabel ("function expects " ++ show (length params) ++ " arguments, got " ++ show (length args)) p
 synthApp _ (T.Arrow a c) [arg] = do
-    check arg a
-    return c
+    arg <- check arg a
+    return (c, [arg])
 synthApp p (T.Arrow _ _) args = errorLabel ("function expects 1 argument, got " ++ show (length args)) p
 synthApp p funcTy _ =
     errorLabel ("cannot call a non-function, specifically a " ++ T.pretty funcTy) p

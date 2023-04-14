@@ -7,12 +7,9 @@ import Data.Void (Void)
 
 import Data.Char (isAlphaNum, isDigit, isLower, isUpper)
 import Data.Foldable (Foldable (foldl', foldr'))
-import Data.Functor ((<&>))
-import Data.List (foldl1')
 import Data.Text qualified as T
-import Debug.Trace (traceShowM)
 import Syntax.Ast qualified as Ast
-import Text.Megaparsec (MonadParsec (eof, takeWhile1P, takeWhileP), ParseErrorBundle, Parsec, between, empty, getOffset, many, option, optional, satisfy, sepBy, sepBy1, some, (<?>), (<|>))
+import Text.Megaparsec (MonadParsec (eof, takeWhile1P, takeWhileP), ParseErrorBundle, Parsec, between, empty, getOffset, option, satisfy, sepBy, sepBy1, some, (<?>), (<|>))
 import Text.Megaparsec.Char (space1)
 import Text.Megaparsec.Char.Lexer qualified as L
 
@@ -108,19 +105,19 @@ patternP = ann
  where
   ann = thenMap patternUnannotatedP Ast.PAnn (symbol ":" *> typeT)
 
-atomE :: Parser Ast.Expr
+atomE :: Parser (Ast.Expr ())
 atomE = call
  where
   base =
-    tupleP Ast.Tuple exprE
-      <|> spanMap Ast.Symbol (qualifiedName symbolicP)
-      <|> spanMap Ast.Symbol symbolP
-      <|> spanMap Ast.Numeric (takeWhile1P (Just "numeric") isDigit)
+    tupleP (Ast.Tuple ()) exprE
+      <|> spanMap (Ast.Symbol ()) (qualifiedName symbolicP)
+      <|> spanMap (Ast.Symbol ()) symbolP
+      <|> spanMap (Ast.Numeric ()) (takeWhile1P (Just "numeric") isDigit)
 
   -- moduleAccess = uncurry Ast.ModuleAccess <$> spanned typenameP <*> option [] (symbol "." *> sepBy1 (spanned typenameP) (symbol "."))
-  call = thenMap (lexeme base) Ast.Call (betweenS "(" ")" (sepBy exprE $ symbol ","))
+  call = thenMap (lexeme base) (Ast.Call ()) (betweenS "(" ")" (sepBy exprE $ symbol ","))
 
-type Stmt = Ast.Expr -> Ast.Expr
+type Stmt = Ast.Expr () -> Ast.Expr ()
 
 defSignature :: Parser a -> Parser (Pos, Text, [Ast.Constraint], [a], Ast.Type)
 defSignature p =
@@ -140,22 +137,22 @@ constraints = betweenS "[" "]" (sepBy1 constraint $ symbol ",")
 defS :: Parser Stmt
 defS = do
   (sp, name, cs, params, retTy) <- defSignature term <* symbol "="
-  Ast.Def sp name cs params retTy <$> exprE
+  Ast.Def () sp name cs params retTy <$> exprE
  where
   term = (,) <$> (lexeme patternUnannotatedP <* symbol ":") <*> typeT
 
 openS :: Parser Stmt
 openS =
-  uncurry Ast.Open
+  uncurry (Ast.Open ())
     <$> (symbol "open" *> (lexeme . spanned) (qualifiedName typenameP))
 
-openE :: Parser Ast.Expr
+openE :: Parser (Ast.Expr ())
 openE = openS <*> (symbol "in" *> exprE)
 
-constructorP :: Parser Ast.Constructor
+constructorP :: Parser (Ast.Constructor ())
 constructorP = do
   (sp, name) <- lexeme (spanned typenameP)
-  let con = Ast.Constructor sp name
+  let con = Ast.Constructor () sp name
   (con <$> betweenS "(" ")" (sepBy1 typeT (symbol ",")))
     <|> return (con [])
 
@@ -164,19 +161,19 @@ typeS =
   symbol "type" *> do
     (sp, name) <- lexeme (spanned typenameP)
     cs <- option [] constraints <* symbol "="
-    Ast.Type sp name cs <$> sepBy1 constructorP (symbol "|")
+    Ast.Type () sp name cs <$> sepBy1 constructorP (symbol "|")
 
-branchB :: Parser Ast.Branch
+branchB :: Parser (Ast.Branch ())
 branchB = Ast.Branch <$> patternP <*> (symbol "=>" *> exprE)
 
-matchE :: Parser Ast.Expr
+matchE :: Parser (Ast.Expr ())
 matchE = do
     sp <- spanOf (symbol "match")
     e <- exprE
-    Ast.Match sp e <$> betweenS "{" "}" (sepBy branchB $ symbol ",")
+    Ast.Match () sp e <$> betweenS "{" "}" (sepBy branchB $ symbol ",")
 
-moduleStmts :: Parser Ast.Expr
-moduleStmts = foldr' ($) Ast.Unit <$> some stmts
+moduleStmts :: Parser (Ast.Expr ())
+moduleStmts = foldr' ($) (Ast.Unit ()) <$> some stmts
  where
   stmts = defS <|> typeS <|> moduleS <|> openS
 
@@ -184,10 +181,10 @@ moduleS :: Parser Stmt
 moduleS =
   symbol "module" *> do
     (sp, name) <- lexeme (spanned typenameP)
-    Ast.Module sp name <$> betweenS "{" "}" moduleStmts
+    Ast.Module () sp name <$> betweenS "{" "}" moduleStmts
 
-exprE :: Parser Ast.Expr
+exprE :: Parser (Ast.Expr ())
 exprE = openE <|> matchE <|> atomE
 
-program :: Parser Ast.Expr
+program :: Parser (Ast.Expr ())
 program = moduleStmts <* eof

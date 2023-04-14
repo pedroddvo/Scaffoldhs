@@ -32,6 +32,9 @@ default-extensions:
 - OverloadedStrings
 - LambdaCase
 - PatternSynonyms
+- ImportQualifiedPost
+- DeriveDataTypeable
+- GeneralizedNewtypeDeriving
 
 ghc-options:
 - -Wall

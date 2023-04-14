@@ -1,17 +1,16 @@
 module Checker.Monad where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
-import Control.Monad.State (MonadState, State, evalState, gets, modify, runState)
+import Control.Monad.State (MonadState, State, gets, modify, runState)
 
 import Checker.Context (Context, (<++))
 import Checker.Context qualified as C
 import Checker.Context qualified as Context
 import Data.Bifunctor qualified as Bifunctor
 import Data.Text (Text)
-import Debug.Trace (traceM, traceShow, traceShowM)
 import Error (Error (..), Pos)
-import Name (Name (Name))
-import Type (Existential, Type)
+import Unique (Name (Name), Unique (Unique))
+import Type (Existential)
 import Type qualified as T
 
 data CheckerState = CheckerState
@@ -79,4 +78,4 @@ runChecker c = case run c of
             . unChecker
 
 freshName :: Text -> Checker Name
-freshName name = Name.Name name . T.unExistential <$> fresh
+freshName name = Unique.Name . flip Unique name . T.unExistential <$> fresh

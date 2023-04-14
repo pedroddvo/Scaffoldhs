@@ -33,11 +33,11 @@ library
       Kind
       Lib
       Module
-      Name
       Pipeline
       Syntax.Ast
       Syntax.Parser
       Type
+      Unique
   other-modules:
       Paths_Scaffoldhs
   hs-source-dirs:
@@ -46,6 +46,9 @@ library
       OverloadedStrings
       LambdaCase
       PatternSynonyms
+      ImportQualifiedPost
+      DeriveDataTypeable
+      GeneralizedNewtypeDeriving
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.7 && <5
@@ -67,6 +70,9 @@ executable Scaffoldhs-exe
       OverloadedStrings
       LambdaCase
       PatternSynonyms
+      ImportQualifiedPost
+      DeriveDataTypeable
+      GeneralizedNewtypeDeriving
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Scaffoldhs
@@ -90,6 +96,9 @@ test-suite Scaffoldhs-test
       OverloadedStrings
       LambdaCase
       PatternSynonyms
+      ImportQualifiedPost
+      DeriveDataTypeable
+      GeneralizedNewtypeDeriving
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       Scaffoldhs

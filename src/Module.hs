@@ -7,8 +7,8 @@ import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Text (Text)
 import Kind (Kind)
-import Name (Name, qualify)
-import Type (Type, Var)
+import Unique (Name, qualify)
+import Type (Type)
 import Type qualified as T
 
 data Module = Module
@@ -28,7 +28,7 @@ qualifyModule :: Text -> Module -> Module
 qualifyModule path m =
     let names = moduleNames m
      in Module
-            { module_types = M.mapKeys (Name.qualify path) (M.map (T.qualifyType names path) $ module_types m)
-            , module_kinds = M.mapKeys (Name.qualify path) (module_kinds m)
-            , module_modules = M.mapKeys (Name.qualify path) (M.map (qualifyModule path) $ module_modules m)
+            { module_types = M.mapKeys (Unique.qualify path) (M.map (T.qualifyType names path) $ module_types m)
+            , module_kinds = M.mapKeys (Unique.qualify path) (module_kinds m)
+            , module_modules = M.mapKeys (Unique.qualify path) (M.map (qualifyModule path) $ module_modules m)
             }

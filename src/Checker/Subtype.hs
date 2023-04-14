@@ -5,8 +5,7 @@ import Checker.Context qualified as C
 import Checker.Monad (Checker, CheckerError (MismatchError), errorLabel, extend, fresh, getCtx, modifyCtx, setCtx, withMarker, withNewMarker)
 import Control.Monad (forM, forM_)
 import Control.Monad.Except (MonadError (catchError), throwError, unless)
-import Debug.Trace (traceShowM, traceM)
-import Error (Error (..), Pos)
+import Error (Pos)
 import Type (Existential, Type)
 import Type qualified as T
 

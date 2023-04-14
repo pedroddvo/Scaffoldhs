@@ -32,6 +32,3 @@ module Bool {
 }
 
 open Bool
-
-def test(): Maybe.Maybe[Int] =
-    Either.toMaybe(Either.map(Bool.toInt, Either.Right(True)))

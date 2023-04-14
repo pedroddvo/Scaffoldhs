@@ -7,7 +7,7 @@ import Data.Maybe (listToMaybe)
 import Data.Text (Text)
 import Kind (Kind (Star), app)
 import Module (Module)
-import Name (Name (Builtin), isName)
+import Unique (Name (Builtin), isName)
 import Type (Existential, Type, Var)
 import Type qualified as T
 
@@ -60,7 +60,7 @@ builtins =
         , builtin "Int" Star
         ]
   where
-    builtin name = Term Private . Kind (Name.Builtin name)
+    builtin name = Term Private . Kind (Unique.Builtin name)
 
 vars :: Context -> [Var]
 vars (Context ctx) = [alpha | Var alpha <- ctx]
@@ -128,15 +128,15 @@ instSolve alpha t ctx = case splitOn (onExistential alpha) ctx of
 
 findType :: Context -> Text -> Maybe Type
 findType (Context ctx) alpha =
-    listToMaybe [t | Term _ (Type name t) <- ctx, Name.isName alpha name]
+    listToMaybe [t | Term _ (Type name t) <- ctx, Unique.isName alpha name]
 
 findModule :: Context -> Text -> Maybe Module
 findModule (Context ctx) alpha =
-    listToMaybe [t | Term _ (Module name t) <- ctx, Name.isName alpha name]
+    listToMaybe [t | Term _ (Module name t) <- ctx, Unique.isName alpha name]
 
 findKind :: Context -> Text -> Maybe (Name, Kind)
 findKind (Context ctx) alpha =
-    listToMaybe [(name, t) | Term _ (Kind name t) <- ctx, Name.isName alpha name]
+    listToMaybe [(name, t) | Term _ (Kind name t) <- ctx, Unique.isName alpha name]
 
 findSolved :: Context -> Existential -> Maybe Type
 findSolved (Context ctx) alpha = listToMaybe [t | Solved beta t <- ctx, alpha == beta]

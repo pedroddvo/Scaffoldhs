@@ -1,16 +1,14 @@
 module Type where
 
 import Data.Data (Data, Typeable)
-import Data.Foldable (foldl')
-import Data.Generics.Uniplate.Data (Uniplate, children, para, rewrite, transform, universe)
+import Data.Generics.Uniplate.Data (transform, universe)
 import Data.List (intercalate)
 import Data.Set (Set)
 import Data.Set qualified as S
 import Data.Set qualified as Set
 import Data.Text (Text)
 import Data.Text qualified as T
-import Debug.Trace (traceShow)
-import Name (Name (Builtin, Name), qualify)
+import Unique (Name (Builtin), qualify)
 
 newtype Var = TVar Text
     deriving (Eq, Data, Typeable, Ord)
@@ -37,10 +35,10 @@ data Type
     deriving (Data, Typeable, Show)
 
 pattern Arrow :: Type -> Type -> Type
-pattern Arrow a b = App (Base (Name.Builtin "->")) [a, b]
+pattern Arrow a b = App (Base (Unique.Builtin "->")) [a, b]
 
 pattern Unit :: Type
-pattern Unit = Base (Name.Builtin "Unit")
+pattern Unit = Base (Unique.Builtin "Unit")
 
 instance Semigroup Var where
     (TVar a) <> (TVar b) = TVar $ a <> b
@@ -107,5 +105,5 @@ qualifyType moduleNames path = transform aux
   where
     aux (Base name)
         | S.member name moduleNames =
-            Base $ Name.qualify path name
+            Base $ Unique.qualify path name
     aux t = t
