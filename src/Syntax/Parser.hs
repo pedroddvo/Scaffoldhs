@@ -16,6 +16,8 @@ import Text.Megaparsec.Char.Lexer qualified as L
 type Parser = Parsec Void Text
 type ParseError = ParseErrorBundle Text Void
 
+type BareExpr = Ast.Expr ()
+
 spanOf :: Parser a -> Parser Pos
 spanOf p = do
   a <- getOffset
@@ -105,7 +107,7 @@ patternP = ann
  where
   ann = thenMap patternUnannotatedP Ast.PAnn (symbol ":" *> typeT)
 
-atomE :: Parser (Ast.Expr ())
+atomE :: Parser BareExpr
 atomE = call
  where
   base =
@@ -117,7 +119,7 @@ atomE = call
   -- moduleAccess = uncurry Ast.ModuleAccess <$> spanned typenameP <*> option [] (symbol "." *> sepBy1 (spanned typenameP) (symbol "."))
   call = thenMap (lexeme base) (Ast.Call ()) (betweenS "(" ")" (sepBy exprE $ symbol ","))
 
-type Stmt = Ast.Expr () -> Ast.Expr ()
+type Stmt = BareExpr -> BareExpr
 
 defSignature :: Parser a -> Parser (Pos, Text, [Ast.Constraint], [a], Ast.Type)
 defSignature p =
@@ -146,7 +148,7 @@ openS =
   uncurry (Ast.Open ())
     <$> (symbol "open" *> (lexeme . spanned) (qualifiedName typenameP))
 
-openE :: Parser (Ast.Expr ())
+openE :: Parser BareExpr
 openE = openS <*> (symbol "in" *> exprE)
 
 constructorP :: Parser (Ast.Constructor ())
@@ -166,13 +168,13 @@ typeS =
 branchB :: Parser (Ast.Branch ())
 branchB = Ast.Branch <$> patternP <*> (symbol "=>" *> exprE)
 
-matchE :: Parser (Ast.Expr ())
+matchE :: Parser BareExpr
 matchE = do
     sp <- spanOf (symbol "match")
     e <- exprE
     Ast.Match () sp e <$> betweenS "{" "}" (sepBy branchB $ symbol ",")
 
-moduleStmts :: Parser (Ast.Expr ())
+moduleStmts :: Parser BareExpr
 moduleStmts = foldr' ($) (Ast.Unit ()) <$> some stmts
  where
   stmts = defS <|> typeS <|> moduleS <|> openS
@@ -183,8 +185,8 @@ moduleS =
     (sp, name) <- lexeme (spanned typenameP)
     Ast.Module () sp name <$> betweenS "{" "}" moduleStmts
 
-exprE :: Parser (Ast.Expr ())
+exprE :: Parser BareExpr
 exprE = openE <|> matchE <|> atomE
 
-program :: Parser (Ast.Expr ())
+program :: Parser BareExpr
 program = moduleStmts <* eof

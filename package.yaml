@@ -27,6 +27,8 @@ dependencies:
 - containers
 - mtl
 - parser-combinators
+- llvm-hs
+- llvm-hs-pure
 
 default-extensions:
 - OverloadedStrings

@@ -53,6 +53,8 @@ library
   build-depends:
       base >=4.7 && <5
     , containers
+    , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , parser-combinators
@@ -78,6 +80,8 @@ executable Scaffoldhs-exe
       Scaffoldhs
     , base >=4.7 && <5
     , containers
+    , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , parser-combinators
@@ -104,6 +108,8 @@ test-suite Scaffoldhs-test
       Scaffoldhs
     , base >=4.7 && <5
     , containers
+    , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , parser-combinators

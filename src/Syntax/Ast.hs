@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveTraversable #-}
 module Syntax.Ast where
 
 import Data.Data (Data, Typeable)
