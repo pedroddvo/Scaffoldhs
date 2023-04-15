@@ -126,9 +126,9 @@ instSolve alpha t ctx = case splitOn (onExistential alpha) ctx of
     (g', g) | wf g t -> Just $ g' <> (g <+ Solved alpha t)
     _ -> Nothing
 
-findType :: Context -> Text -> Maybe Type
+findType :: Context -> Text -> Maybe (Name, Type)
 findType (Context ctx) alpha =
-    listToMaybe [t | Term _ (Type name t) <- ctx, Unique.isName alpha name]
+    listToMaybe [(name, t) | Term _ (Type name t) <- ctx, Unique.isName alpha name]
 
 findModule :: Context -> Text -> Maybe Module
 findModule (Context ctx) alpha =

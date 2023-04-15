@@ -25,6 +25,7 @@ dependencies:
 - text
 - uniplate
 - containers
+- text-short
 - mtl
 - parser-combinators
 - llvm-hs

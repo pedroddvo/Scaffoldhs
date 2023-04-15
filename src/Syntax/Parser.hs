@@ -16,7 +16,7 @@ import Text.Megaparsec.Char.Lexer qualified as L
 type Parser = Parsec Void Text
 type ParseError = ParseErrorBundle Text Void
 
-type BareExpr = Ast.Expr ()
+type BareExpr = Ast.Expr Text
 
 spanOf :: Parser a -> Parser Pos
 spanOf p = do
@@ -111,13 +111,13 @@ atomE :: Parser BareExpr
 atomE = call
  where
   base =
-    tupleP (Ast.Tuple ()) exprE
-      <|> spanMap (Ast.Symbol ()) (qualifiedName symbolicP)
-      <|> spanMap (Ast.Symbol ()) symbolP
-      <|> spanMap (Ast.Numeric ()) (takeWhile1P (Just "numeric") isDigit)
+    tupleP Ast.Tuple exprE
+      <|> spanMap Ast.Symbol (qualifiedName symbolicP)
+      <|> spanMap Ast.Symbol symbolP
+      <|> spanMap Ast.Numeric (takeWhile1P (Just "numeric") isDigit)
 
   -- moduleAccess = uncurry Ast.ModuleAccess <$> spanned typenameP <*> option [] (symbol "." *> sepBy1 (spanned typenameP) (symbol "."))
-  call = thenMap (lexeme base) (Ast.Call ()) (betweenS "(" ")" (sepBy exprE $ symbol ","))
+  call = thenMap (lexeme base) Ast.Call (betweenS "(" ")" (sepBy exprE $ symbol ","))
 
 type Stmt = BareExpr -> BareExpr
 
@@ -139,22 +139,22 @@ constraints = betweenS "[" "]" (sepBy1 constraint $ symbol ",")
 defS :: Parser Stmt
 defS = do
   (sp, name, cs, params, retTy) <- defSignature term <* symbol "="
-  Ast.Def () sp name cs params retTy <$> exprE
+  Ast.Def sp name cs params retTy <$> exprE
  where
   term = (,) <$> (lexeme patternUnannotatedP <* symbol ":") <*> typeT
 
 openS :: Parser Stmt
 openS =
-  uncurry (Ast.Open ())
+  uncurry Ast.Open
     <$> (symbol "open" *> (lexeme . spanned) (qualifiedName typenameP))
 
 openE :: Parser BareExpr
 openE = openS <*> (symbol "in" *> exprE)
 
-constructorP :: Parser (Ast.Constructor ())
+constructorP :: Parser (Ast.Constructor Text)
 constructorP = do
   (sp, name) <- lexeme (spanned typenameP)
-  let con = Ast.Constructor () sp name
+  let con = Ast.Constructor sp name
   (con <$> betweenS "(" ")" (sepBy1 typeT (symbol ",")))
     <|> return (con [])
 
@@ -163,19 +163,19 @@ typeS =
   symbol "type" *> do
     (sp, name) <- lexeme (spanned typenameP)
     cs <- option [] constraints <* symbol "="
-    Ast.Type () sp name cs <$> sepBy1 constructorP (symbol "|")
+    Ast.Type sp name cs <$> sepBy1 constructorP (symbol "|")
 
-branchB :: Parser (Ast.Branch ())
+branchB :: Parser (Ast.Branch Text)
 branchB = Ast.Branch <$> patternP <*> (symbol "=>" *> exprE)
 
 matchE :: Parser BareExpr
 matchE = do
     sp <- spanOf (symbol "match")
     e <- exprE
-    Ast.Match () sp e <$> betweenS "{" "}" (sepBy branchB $ symbol ",")
+    Ast.Match sp e <$> betweenS "{" "}" (sepBy branchB $ symbol ",")
 
 moduleStmts :: Parser BareExpr
-moduleStmts = foldr' ($) (Ast.Unit ()) <$> some stmts
+moduleStmts = foldr' ($) Ast.Unit <$> some stmts
  where
   stmts = defS <|> typeS <|> moduleS <|> openS
 
@@ -183,7 +183,7 @@ moduleS :: Parser Stmt
 moduleS =
   symbol "module" *> do
     (sp, name) <- lexeme (spanned typenameP)
-    Ast.Module () sp name <$> betweenS "{" "}" moduleStmts
+    Ast.Module sp name <$> betweenS "{" "}" moduleStmts
 
 exprE :: Parser BareExpr
 exprE = openE <|> matchE <|> atomE

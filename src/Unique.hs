@@ -39,3 +39,7 @@ isName t (Name t') = t == unique_name t'
 qualify :: Text -> Name -> Name
 qualify path (Name uniq) = Name $ Unique (unique_id uniq) (path <> "." <> unique_name uniq)
 qualify _ n = n
+
+nameText :: Name -> Text
+nameText (Builtin t) = t
+nameText (Name uniq) = unique_name uniq
